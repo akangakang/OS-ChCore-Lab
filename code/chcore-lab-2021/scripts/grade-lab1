@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+import re
+from gradelib import *
+
+r = Runner(save("chcore.out"),
+           stop_breakpoint("break_point"))
+
+@test(0, "running ChCore")
+def test_chcore():
+    r.run_qemu(30)
+
+@test(15, parent=test_chcore)
+def test_print_hex():
+    addrs = [int(sym[:16], 16) for sym in open("./build/kernel.sym")
+            if sym[19:].strip() == "main"]
+    r.match("\[INFO\] Address of main\(\) is 0x%x" % addrs[0])
+
+@test(15, parent=test_chcore)
+def test_print_oct():
+    r.match("\[INFO\] 123456 decimal is 0361100 octal")
+
+BACKTRACE_RE = r" *LR *ffffff00000[0-9a-z]{5} *FP *ffffff0000[0-9a-z]{6} *Args *([0-9a-z]+)"
+BACKTRACE_LR = r" *LR *(ffffff00000[0-9a-z]{5}) *FP *ffffff0000[0-9a-z]{6} *Args *[0-9a-z]+"
+
+@test(15, parent=test_chcore)
+def test_stack_count():
+    matches = re.findall(BACKTRACE_RE, r.qemu.output, re.MULTILINE)
+    assert_equal(len(matches), 7)
+
+@test(15, parent=test_chcore)
+def test_stack_arguments():
+    matches = re.findall(BACKTRACE_RE, r.qemu.output, re.MULTILINE)
+    assert_equal("\n".join(matches[:6]),
+                 "\n".join("%01x" % n for n in [0,1,2,3,4,5]))
+
+@test(20, parent=test_chcore)
+def test_stack_lr():
+    matches = re.findall(BACKTRACE_LR, r.qemu.output, re.MULTILINE)
+    addrs = [int(sym[:16], 16) for sym in open("./build/kernel.sym")
+            if sym[19:].strip() == "stack_test"][0] + 80
+    for i in range(5):
+        assert_equal(int(matches[i], 16), addrs)
+
+run_tests()

@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+
+import re
+from gradelib import *
+
+r = Runner(save("chcore.out"),
+           stop_breakpoint("break_point"))
+
+@test(0, "running chcore")
+def test_chcore():
+    r.run_qemu(10)
+
+@test(5, parent=test_chcore)
+def test_smp():
+    line = r.match("\[INFO\] AP 1 is activated!")
+    line = r.match_line(line, "\[INFO\] AP 2 is activated!")
+    line = r.match_line(line, "\[INFO\] AP 3 is activated!")
+    r.match_line(line, "\[INFO\] All 4 CPUs are active")
+
+@test(5, parent=test_chcore)
+def test_mutex():
+    r.match("pass tst_mutex")
+
+@test(5, parent=test_chcore)
+def test_big_lock():
+    r.match("pass tst_big_lock")
+
+@test(10, parent=test_chcore)
+def test_cooperative():
+    r.match("pass tst_sched_cooperative")
+
+@test(5, parent=test_chcore)
+def test_preemptive():
+    r.match("pass tst_sched_preemptive")
+
+@test(5, parent=test_chcore)
+def test_affinity():
+    r.match("pass tst_sched_affinity")
+
+@test(5, parent=test_chcore)
+def test_sched():
+    r.match("pass tst_sched")
+
+@test(0, parent=test_sched)
+def test_yield_single():
+    r.make_kernel("yield_single")
+    r.run_qemu(10)
+
+@test(5, parent=test_yield_single)
+def test_yield_single_output():
+    line = r.match("Hello, I am thread 0")
+    line = r.match_line(line,"Hello, I am thread 1")
+    line = r.match_line(line,"Iteration 1, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 1, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 2, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 2, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 3, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 3, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 4, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 4, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 5, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 5, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 6, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 6, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 7, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 7, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 8, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 8, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 9, thread 0, cpu 0")
+    line = r.match_line(line,"Iteration 9, thread 1, cpu 0")
+    line = r.match_line(line,"Iteration 10, thread 0, cpu 0")
+    r.match_line(line,"Iteration 10, thread 1, cpu 0")
+
+@test(0, parent=test_yield_single_output)
+def test_yield_spin():
+    r.make_kernel("yield_spin")
+    r.run_qemu(10)
+
+@test(5, parent=test_yield_spin)
+def test_yield_spin_output():
+    r.match("Successfully regain the control!")
+
+@test(0, parent=test_yield_spin_output)
+def test_yield_multi():
+    r.make_kernel("yield_multi")
+    r.run_qemu(10)
+
+@test(5, parent=test_yield_multi)
+def test_yield_multi_output():
+    line = r.match("Hello, I am thread 0 on cpu 0")
+    line = r.match_line(line, "Hello, I am thread 1 on cpu 1")
+    line = r.match_line(line, "Hello, I am thread 2 on cpu 2")
+    r.match_line(line, "Hello, I am thread 3 on cpu 3")
+
+@test(0, parent=test_yield_multi_output)
+def test_yield_aff():
+    r.make_kernel("yield_aff")
+    r.run_qemu(10)
+
+@test(5, parent=test_yield_aff)
+def test_yield_aff_output():
+    line = r.match("Main thread on cpu 0")
+    line = r.match_line(line, "Main thread set affinity 3")
+    line = r.match_line(line, "Main thread affinity 3")
+    r.match_line(line, "Main thread exits on cpu_id: 3")
+
+@test(0, parent=test_yield_aff_output)
+def test_yield_multi_aff():
+    r.make_kernel("yield_multi_aff")
+    r.run_qemu(20)
+
+@test(5, parent=test_yield_multi_aff)
+def test_yield_multi_aff_output():
+    line = r.match("Iteration 1, thread 0, cpu 0, aff 0")
+    line = r.match_line(line, "Iteration 1, thread 1, cpu 1, aff 1")
+    line = r.match_line(line, "Iteration 1, thread 2, cpu 2, aff 2")
+    line = r.match_line(line, "Iteration 1, thread 3, cpu 1, aff 1")
+    line = r.match_line(line, "Iteration 2, thread 0, cpu 2, aff 2")
+    line = r.match_line(line, "Iteration 2, thread 1, cpu 3, aff 3")
+    line = r.match_line(line, "Iteration 2, thread 2, cpu 0, aff 0")
+    line = r.match_line(line, "Iteration 2, thread 3, cpu 2, aff 2")
+    line = r.match_line(line, "Iteration 3, thread 0, cpu 3, aff 3")
+    line = r.match_line(line, "Iteration 3, thread 1, cpu 0, aff 0")
+    line = r.match_line(line, "Iteration 3, thread 2, cpu 1, aff 1")
+    r.match_line(line, "Iteration 3, thread 3, cpu 3, aff 3")
+
+@test(0, parent=test_yield_multi_aff_output)
+def test_spawn_basic():
+    r.make_kernel("spawn_basic")
+    r.run_qemu(10)
+
+@test(10, parent=test_spawn_basic)
+def test_spawn_basic_output():
+    line = r.match("\[Child\] Child on cpu 1")
+    line = r.match_line(line, "\[Child\] argv: 0x800f008, argv\[0\]: 0x800ffc0")
+    line = r.match_line(line, "\[Child\] info_page_addr: 0x0")
+    line = r.match_line(line, "\[Child\] transfered_cap: 0")
+    r.match_line(line, "\[Child\] Bye")
+
+@test(0, parent=test_spawn_basic_output)
+def test_spawn_info():
+    r.make_kernel("spawn_info")
+    r.run_qemu(10)
+
+@test(5, parent=test_spawn_info)
+def test_spawn_info_output():
+    line = r.match("\[Child\] Child on cpu 2")
+    line = r.match_line(line, "\[Child\] argv: 0x800f008, argv\[0\]: 0x800ffc0")
+    line = r.match_line(line, "\[Child\] info_page_addr: 0x100000000")
+    line = r.match_line(line, "\[Child\] The spawn\(\) seems ok\?")
+    line = r.match_line(line, "\[Child\] Uif!tqbxo\)\*!tffnt!pl@")
+    line = r.match_line(line, "\[Child\] Bye")
+    line = r.match_line(line, "\[Parent\] Are you ok\.\.\.")
+    r.match_line(line, "\[Parent\] Bye")
+
+@test(0, parent=test_spawn_info_output)
+def test_ipc_data():
+    r.make_kernel("ipc_data")
+    r.run_qemu(10)
+
+@test(10, parent=test_ipc_data)
+def test_ipc_data_output():
+    line = r.match("\[Parent\] create the server process\.")
+    line = r.match_line(line, "\[Client\] Return 4950!")
+    line = r.match_line(line, "\[Client\] exit")
+    r.match_line(line, "\[Server\] exit")
+
+@test(0, parent=test_ipc_data_output)
+def test_ipc_mem():
+    r.make_kernel("ipc_mem")
+    r.run_qemu(10)
+
+@test(5, parent=test_ipc_mem)
+def test_ipc_mem_output():
+    line = r.match("\[Parent\] create the server process\.")
+    line = r.match_line(line, "\[Server\] read deadbeef")
+    line = r.match_line(line, "\[Client\] exit")
+    r.match_line(line, "\[Server\] exit")
+
+@test(0, parent=test_ipc_mem_output)
+def test_ipc_reg():
+    r.make_kernel("ipc_reg")
+    r.run_qemu(10)
+
+@test(5, parent=test_ipc_reg)
+def test_ipc_reg_output():
+    line = r.match("\[Parent\] create the server process\.")
+    line = r.match_line(line, "\[Client\] Return 526!")
+    line = r.match_line(line, "\[Client\] exit")
+    r.match_line(line, "\[Server\] exit")
+
+
+run_tests()

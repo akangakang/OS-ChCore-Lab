@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+import re
+from gradelib import *
+
+r = Runner(save("chcore.out"),
+           stop_breakpoint("break_point"))
+
+@test(0, "running chcore")
+def test_chcore():
+    r.run_qemu(10)
+
+@test(30, parent=test_chcore)
+def test_buddy():
+    r.file_match("./tests/mm/buddy/buddy.out","0 failures")
+
+@test(40, parent=test_chcore)
+def test_page_table():
+    r.file_match("./tests/mm/page_table/page_table.out","0 failures")
+
+@test(30, parent=test_chcore)
+def test_kernel_space_check():
+    r.match("\[INFO\] mm init finished")
+
+
+
+run_tests()

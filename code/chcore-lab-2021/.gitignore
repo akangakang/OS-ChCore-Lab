@@ -1,0 +1,16 @@
+*.o
+*.elf
+*.img
+*.bin
+*.pyc
+*.swp
+
+cscope.*
+.vscode
+
+asm
+tags
+build
+*.out
+*.pyc
+chcore.out
